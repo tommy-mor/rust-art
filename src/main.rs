@@ -5,14 +5,24 @@ use rand::prelude::*;
 use std::time::SystemTime;
 
 
-const WIDTH: usize = 200;
-const HEIGHT: usize = 200;
+const WIDTH: usize = 1024;
+const HEIGHT: usize = 1024;
 
 const LEFT: u8 = 0;
 const RIGHT: u8 = 1;
 const UP: u8 = 2;
 const DOWN: u8 = 3;
 
+const color_map: [u8; 24] = [
+    255,0  ,0  ,    // Initial symbol color
+    0  ,0  ,0  ,    // Black
+    255,255,255,    // White
+    0  ,255,0  ,    // Green
+    0  ,0  ,255,    // Blue
+    255,255,0  ,
+    0  ,255,255,
+    255,0  ,255,
+];
 
 struct TuringMachine {
     table: Vec<u8>,
@@ -78,10 +88,14 @@ impl TuringMachine {
         }
     }
 
-    fn get_render_buf(&self) -> Vec<bool> {
-        let mut r_vec = vec![false; WIDTH * HEIGHT];
+    fn get_render_buf(&self) -> Vec<[u8;4]> {
+        let mut r_vec = vec![[0u8, 255u8, 255u8, 255u8]; WIDTH * HEIGHT];
         for i in 0..self.map.len() {
-            r_vec[i] = self.map[i] == 0;
+            let sy = self.map[i];
+            let r = color_map[(3 * sy + 0) as usize];
+            let g = color_map[(3 * sy + 1) as usize];
+            let b = color_map[(3 * sy + 2) as usize];
+            r_vec[i] = [r, g, b, 255];
         }
         r_vec
     }
@@ -161,17 +175,12 @@ fn main() {
         ..Default::default()
     });
 
-    fb.change_buffer_format::<u8>(BufferFormat::R);
-    fb.use_post_process_shader(POST_PROCESS);
+    fb.change_buffer_format::<u8>(BufferFormat::RGBA);
+    //fb.use_post_process_shader(POST_PROCESS);
 
 
     let mut machine = TuringMachine::new(3,4);
     machine.init(); //very smart
-
-
-    let mut neighbors = vec![0; WIDTH * HEIGHT];
-    let mut cells = vec![false; WIDTH * HEIGHT];
-
 
     let mut previous = SystemTime::now();
     let mut extra_delay: f64 = 0.0;
@@ -189,6 +198,8 @@ fn main() {
             let (x, y) = input.mouse_pos;
             let x = x.min(WIDTH as f64 - 0.0001).max(0.0).floor() as usize;
             let y = y.min(HEIGHT as f64 - 0.0001).max(0.0).floor() as usize;
+
+            machine.reset();
 //            cells[y * WIDTH + x] = true;
 //            fb.update_buffer(&cells);
 //            // Give the user extra time to make something pretty each time they click
@@ -196,96 +207,36 @@ fn main() {
 //            extra_delay = (extra_delay + 0.5).min(2.0);
         }
 
+        if input.mouse_is_down(MouseButton::Right) {
+            // Mouse was pressed
+            let (x, y) = input.mouse_pos;
+            let x = x.min(WIDTH as f64 - 0.0001).max(0.0).floor() as usize;
+            let y = y.min(HEIGHT as f64 - 0.0001).max(0.0).floor() as usize;
+
+            machine = TuringMachine::new(3,4);
+            machine.init();
+//            cells[y * WIDTH + x] = true;
+//            fb.update_buffer(&cells);
+//            // Give the user extra time to make something pretty each time they click
+            previous = SystemTime::now();
+//            extra_delay = (extra_delay + 0.5).min(2.0);
+        }
+
         // Each generation should stay on screen for half a second
-        if seconds > 0.01 + extra_delay {
+        if seconds > 0.00 + extra_delay {
             previous = SystemTime::now();
 //            calculate_neighbors(&mut cells, &mut neighbors);
 //            make_some_babies(&mut cells, &mut neighbors);
-            machine.update(5000);
+            machine.update(500000);
             fb.update_buffer(&machine.get_render_buf());
             extra_delay = 0.0;
+            println!("frequency {}", 1.0/seconds);
         } else if input.resized {
             fb.redraw();
         }
 
         true
     });
-}
-
-fn calculate_neighbors(cells: &mut [bool], neighbors: &mut [u32]) {
-    // a very basic GOL implementation; assumes outside the grid is dead
-    for y in 0..HEIGHT {
-        for x in 0..WIDTH {
-            let mut n = 0;
-
-            // Above
-            if y > 0 {
-                let j = y - 1;
-                if x > 0 && cells[j * WIDTH + x - 1] {
-                    n += 1;
-                }
-                if cells[j * WIDTH + x] {
-                    n += 1;
-                }
-                if x < (WIDTH - 1) && cells[j * WIDTH + x + 1] {
-                    n += 1;
-                }
-            }
-
-            // On the same line
-            if x > 0 && cells[y * WIDTH + x - 1] {
-                n += 1;
-            }
-            if x < (WIDTH - 1) && cells[y * WIDTH + x + 1] {
-                n += 1;
-            }
-
-            // Below
-            if y < (HEIGHT - 1) {
-                let j = y + 1;
-                if x > 0 && cells[j * WIDTH + x - 1] {
-                    n += 1;
-                }
-                if cells[j * WIDTH + x] {
-                    n += 1;
-                }
-                if x < (WIDTH - 1) && cells[j * WIDTH + x + 1] {
-                    n += 1;
-                }
-            }
-
-            let cell = y * WIDTH + x;
-            neighbors[cell] = n;
-        }
-    }
-}
-
-fn make_some_babies(cells: &mut [bool], neighbors: &mut [u32]) {
-    for y in 0..HEIGHT {
-        for x in 0..WIDTH {
-            let cell = y * WIDTH + x;
-
-            if !cells[cell] {
-                // if this cell is dead
-                if neighbors[cell] == 3 {
-                    // and it has three neighbors...
-                    cells[cell] = true;
-                }
-                // else it stays dead
-                continue;
-            }
-            // the cell is alive
-
-            if neighbors[cell] <= 1 {
-                // die from under population
-                cells[cell] = false;
-            } else if neighbors[cell] > 3 {
-                // die from over population
-                cells[cell] = false;
-            }
-            // else: survive to the next generation
-        }
-    }
 }
 
 const POST_PROCESS: &str = r#"
