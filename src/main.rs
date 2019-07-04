@@ -4,6 +4,7 @@ use mini_gl_fb::{BufferFormat, Config};
 use rand::prelude::*;
 use std::time::SystemTime;
 
+
 const WIDTH: usize = 200;
 const HEIGHT: usize = 200;
 
@@ -20,8 +21,8 @@ struct TuringMachine {
     num_symbols: u8,
     rng: SmallRng,
     state: u8,
-    xpos: u8,
-    ypos: u8,
+    xpos: usize,
+    ypos: usize,
     itr_count: u32,
 }
 
@@ -37,6 +38,9 @@ impl TuringMachine {
         assert!(num_states >= 1, "must have at least 1 state");
         assert!(num_symbols >= 2, "must have at least 2 symbols");
         let mut table = Vec::with_capacity((num_states * num_symbols) as usize * 3);
+        for _ in 0..(num_states * num_symbols * 3) {
+            table.push(0);
+        }
         let mut map = [0u8; WIDTH * HEIGHT];
         let mut rng = SmallRng::from_entropy();
         let mut state = 0;
@@ -74,6 +78,14 @@ impl TuringMachine {
         }
     }
 
+    fn get_render_buf(&self) -> Vec<bool> {
+        let mut r_vec = vec![false; WIDTH * HEIGHT];
+        for i in 0..self.map.len() {
+            r_vec[i] = self.map[i] == 0;
+        }
+        r_vec
+    }
+
     fn set_trans(&mut self, st0: u8, sy0: u8, st1: u8, sy1: u8, ac: u8) {
         let idx = ((self.num_states * sy0 + st0) * 3) as usize;
 
@@ -93,7 +105,9 @@ impl TuringMachine {
 
     fn update(&mut self, num_iters: u32) {
         for i in 0..num_iters {
-            let sy = self.map[WIDTH * (self.ypos + self.xpos) as usize];
+            let sadf = (WIDTH * self.ypos + self.xpos);
+
+            let sy = self.map[sadf];
             let st = self.state;
 
             let idx: usize = (self.num_states * sy as u8 + st as u8) as usize;
@@ -103,31 +117,32 @@ impl TuringMachine {
 
             self.state = st;
 
-            self.map[WIDTH * (self.ypos + self.xpos) as usize] = sy;
+            self.map[sadf] = sy;
 
             match ac {
                 LEFT=> {
                     self.xpos  += 1;
-                    if self.xpos >= WIDTH as u8 {
-                        self.xpos -= WIDTH as u8;
+                    if self.xpos >= WIDTH  {
+                        self.xpos -= WIDTH;
                     }
                 },
                 RIGHT => {
-                    self.xpos  -= 1;
-                    if self.xpos < 0 {
-                        self.xpos += WIDTH as u8;
-                    }
+                    self.xpos = if let Some(x) = self.xpos.checked_sub(1) {
+                        x
+                    } else {
+                        WIDTH-1
+                    };
                 },
                 UP=> {
-                    self.ypos  -= 1;
-                    if self.ypos < 0 {
-                        self.ypos += HEIGHT as u8;
+                    if self.ypos == 0 {
+                        self.ypos += HEIGHT - 1;
                     }
+                    self.ypos  -= 1;
                 },
                 DOWN => {
                     self.ypos += 1;
-                    if self.ypos >= HEIGHT as u8 {
-                        self.ypos -= HEIGHT as u8;
+                    if self.ypos >= HEIGHT {
+                        self.ypos -= HEIGHT;
                     }
                 }
                 _ => panic!("invalid action")
@@ -153,18 +168,10 @@ fn main() {
     let mut machine = TuringMachine::new(3,4);
     machine.init(); //very smart
 
+
     let mut neighbors = vec![0; WIDTH * HEIGHT];
     let mut cells = vec![false; WIDTH * HEIGHT];
 
-    cells[5 * WIDTH + 10] = true;
-    cells[5 * WIDTH + 11] = true;
-    cells[5 * WIDTH + 12] = true;
-
-    cells[50 * WIDTH + 50] = true;
-    cells[51 * WIDTH + 51] = true;
-    cells[52 * WIDTH + 49] = true;
-    cells[52 * WIDTH + 50] = true;
-    cells[52 * WIDTH + 51] = true;
 
     let mut previous = SystemTime::now();
     let mut extra_delay: f64 = 0.0;
@@ -182,19 +189,20 @@ fn main() {
             let (x, y) = input.mouse_pos;
             let x = x.min(WIDTH as f64 - 0.0001).max(0.0).floor() as usize;
             let y = y.min(HEIGHT as f64 - 0.0001).max(0.0).floor() as usize;
-            cells[y * WIDTH + x] = true;
-            fb.update_buffer(&cells);
-            // Give the user extra time to make something pretty each time they click
-            previous = SystemTime::now();
-            extra_delay = (extra_delay + 0.5).min(2.0);
+//            cells[y * WIDTH + x] = true;
+//            fb.update_buffer(&cells);
+//            // Give the user extra time to make something pretty each time they click
+//            previous = SystemTime::now();
+//            extra_delay = (extra_delay + 0.5).min(2.0);
         }
 
         // Each generation should stay on screen for half a second
-        if seconds > 0.5 + extra_delay {
+        if seconds > 0.01 + extra_delay {
             previous = SystemTime::now();
-            calculate_neighbors(&mut cells, &mut neighbors);
-            make_some_babies(&mut cells, &mut neighbors);
-            fb.update_buffer(&cells);
+//            calculate_neighbors(&mut cells, &mut neighbors);
+//            make_some_babies(&mut cells, &mut neighbors);
+            machine.update(5000);
+            fb.update_buffer(&machine.get_render_buf());
             extra_delay = 0.0;
         } else if input.resized {
             fb.redraw();
@@ -280,14 +288,8 @@ fn make_some_babies(cells: &mut [bool], neighbors: &mut [u32]) {
     }
 }
 
-const POST_PROCESS: &str = "
-    bool on_grid_line(float pos) {
-        if (fract(pos) < 0.2) {
-            return false;
-        } else {
-            return false;
-        }
-    }
+const POST_PROCESS: &str = r#"
+
     void main_image( out vec4 r_frag_color, in vec2 uv )
     {
         // A bool is stored as 1 in our image buffer
@@ -298,10 +300,7 @@ const POST_PROCESS: &str = "
         // invert it since that's how GOL stuff is typically shown
         sample = 1.0 - sample;
         // attempt to add some grid lines (assumes width and height of image are 200)...
-        vec2 grid_pos = uv * 200;
-        if (on_grid_line(grid_pos.x) || on_grid_line(grid_pos.y)) {
-            sample = max(sample - 0.4, vec3(0.0, 0.0, 0.0));
-        }
+
         r_frag_color = vec4(sample, 1.0);
     }
-";
+"#;

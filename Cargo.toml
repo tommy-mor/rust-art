@@ -11,3 +11,6 @@ mini_gl_fb = "0.7.0"
 framebuffer = "0.1.8"
 gl = "*"
 rand = "*"
+
+[profile.dev]
+overflow-checks = false
