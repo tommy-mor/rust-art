@@ -10,7 +10,10 @@ edition = "2018"
 mini_gl_fb = "0.7.0"
 framebuffer = "0.1.8"
 gl = "*"
-rand = "*"
+
+[dependencies.rand]
+version = "*"
+features = ["small_rng"]
 
 [profile.dev]
 overflow-checks = false
