@@ -9,6 +9,7 @@ edition = "2018"
 [dependencies]
 mini_gl_fb = "0.7.0"
 framebuffer = "0.1.8"
+arrayvec = "0.4.1"
 gl = "*"
 
 [dependencies.rand]
