@@ -200,10 +200,6 @@ fn main() {
         }
 
         if input.mouse_is_down(MouseButton::Right) {
-            let (x, y) = input.mouse_pos;
-            let x = x.min(WIDTH as f64 - 0.0001).max(0.0).floor() as usize;
-            let y = y.min(HEIGHT as f64 - 0.0001).max(0.0).floor() as usize;
-
             playing = true;
             machine = TuringMachine::new(3, 4);
             previous = SystemTime::now();
