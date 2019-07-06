@@ -13,8 +13,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use arrayvec::ArrayVec;
 use screenshot_rs::screenshot_window;
 
-const WIDTH: usize = 512;
-const HEIGHT: usize = 512;
+const WIDTH: usize = 1024;
+const HEIGHT: usize = 1025;
 
 enum Action {
     Up,
@@ -183,12 +183,14 @@ impl TuringMachine {
 }
 
 fn main() {
-    let mut fb = mini_gl_fb::gotta_go_fast("gaymers", WIDTH as f64, HEIGHT as f64);
+    let mut fb = mini_gl_fb::gotta_go_fast("art", WIDTH as f64, HEIGHT as f64);
 
     fb.change_buffer_format::<u8>(BufferFormat::R);
     fb.use_post_process_shader(COLOR_SYMBOLS);
 
-    let mut machine = TuringMachine::from_string("5,4,4,2,1,1,3,2,4,3,1,2,2,3,1,2,1,3,2,0,2,2,3,2,3,0,2,3,2,4,2,2,0,2,0,1,1,0,2,3,0,1,2,1,2,3,3,3,2,0,1,1,3,2,2,0,2,2,3,3,2,0");
+    //let mut machine = TuringMachine::from_string("5,4,4,2,1,1,3,2,4,3,1,2,2,3,1,2,1,3,2,0,2,2,3,2,3,0,2,3,2,4,2,2,0,2,0,1,1,0,2,3,0,1,2,1,2,3,3,3,2,0,1,1,3,2,2,0,2,2,3,3,2,0");
+    let mut machine = TuringMachine::from_string("3,6,2,2,3,2,4,0,0,1,0,2,1,2,1,1,0,1,2,3,2,3,0,2,1,0,2,5,3,2,5,2,2,4,1,1,5,0,2,4,3,0,4,0,0,1,1,2,1,3,2,1,0,2,2,0");
+
     let mut previous = SystemTime::now();
 
     let mut playing = true;
@@ -225,7 +227,7 @@ fn main() {
 
         if input.mouse_is_down(MouseButton::Right) {
             playing = true;
-            machine = TuringMachine::new(3, 4);
+            machine = TuringMachine::new(12, 7);
             previous = SystemTime::now();
         }
 
