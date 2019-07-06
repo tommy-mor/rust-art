@@ -13,7 +13,7 @@ arrayvec = "0.4.1"
 gl = "*"
 
 [dependencies.rand]
-version = "*"
+version = "0.7.0"
 features = ["small_rng"]
 
 [profile.dev]

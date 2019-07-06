@@ -183,6 +183,9 @@ fn main() {
 
     let mut previous = SystemTime::now();
     let mut extra_delay: f64 = 0.0;
+    let mut playing = true;
+
+    let mut space_pressed = false;
 
     fb.glutin_handle_basic_input(|fb, input| {
         let elapsed = previous.elapsed().unwrap();
@@ -192,12 +195,22 @@ fn main() {
             return false;
         }
 
+        if input.key_is_down(VirtualKeyCode::R) {
+            let mut rng = SmallRng::from_entropy();
+            machine.reset();
+            machine.state = rng.gen_range(0,machine.num_states);
+
+        }
+
+
+
         if input.mouse_is_down(MouseButton::Left) {
             // Mouse was pressed
             let (x, y) = input.mouse_pos;
             let x = x.min(WIDTH as f64 - 0.0001).max(0.0).floor() as usize;
             let y = y.min(HEIGHT as f64 - 0.0001).max(0.0).floor() as usize;
 
+            playing = true;
             machine.reset();
 //            cells[y * WIDTH + x] = true;
 //            fb.update_buffer(&cells);
@@ -212,6 +225,7 @@ fn main() {
             let x = x.min(WIDTH as f64 - 0.0001).max(0.0).floor() as usize;
             let y = y.min(HEIGHT as f64 - 0.0001).max(0.0).floor() as usize;
 
+            playing = true;
             machine = TuringMachine::new(3,4);
         //    machine.init();
 //            cells[y * WIDTH + x] = true;
@@ -221,18 +235,30 @@ fn main() {
 //            extra_delay = (extra_delay + 0.5).min(2.0);
         }
 
+        if input.key_is_down(VirtualKeyCode::Space) {
+            if !space_pressed {
+                playing = !playing;
+                space_pressed = true;
+            }
+        } else {
+            space_pressed = false;
+        }
+
         // Each generation should stay on screen for half a second
-        if seconds > 0.00 + extra_delay {
+        if (seconds > 0.00 + extra_delay) && playing {
             previous = SystemTime::now();
 //            calculate_neighbors(&mut cells, &mut neighbors);
 //            make_some_babies(&mut cells, &mut neighbors);
             machine.update(500000);
             fb.update_buffer(&machine.get_render_buf());
             extra_delay = 0.0;
-            println!("frequency {}", 1.0/seconds);
+            //println!("frequency {}", 1.0/seconds);
+            //println!("{}", playing);
         } else if input.resized {
             fb.redraw();
         }
+
+
 
         true
     });
