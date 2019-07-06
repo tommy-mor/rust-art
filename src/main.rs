@@ -1,5 +1,5 @@
 use mini_gl_fb::glutin::{MouseButton, VirtualKeyCode};
-use mini_gl_fb::{BufferFormat, Config};
+use mini_gl_fb::BufferFormat;
 
 use rand::prelude::*;
 use rand::{
@@ -13,11 +13,6 @@ use arrayvec::ArrayVec;
 
 const WIDTH: usize = 1024;
 const HEIGHT: usize = 1024;
-
-const LEFT: u8 = 0;
-const RIGHT: u8 = 1;
-const UP: u8 = 2;
-const DOWN: u8 = 3;
 
 enum Action {
     Up,
@@ -42,17 +37,6 @@ struct Transition {
     symbol: u8,
     action: Action,
 }
-
-const color_map: [u8; 24] = [
-    255,0  ,0  ,    // Initial symbol color
-    0  ,0  ,0  ,    // Black
-    255,255,255,    // White
-    0  ,255,0  ,    // Green
-    0  ,0  ,255,    // Blue
-    255,255,0  ,    // Yellow
-    0  ,255,255,
-    255,0  ,255,
-];
 
 struct TuringMachine {
     table: ArrayVec<[Transition; 4096]>,
@@ -105,17 +89,6 @@ impl TuringMachine {
         }
     }
 
-    fn get_render_buf(&self) -> Vec<[u8; 4]> {
-        let mut r_vec = vec![[0u8, 255u8, 255u8, 255u8]; WIDTH * HEIGHT];
-        for (sy, rv) in self.map.iter().zip(r_vec.iter_mut()) {
-            let r = color_map[(3 * sy + 0) as usize];
-            let g = color_map[(3 * sy + 1) as usize];
-            let b = color_map[(3 * sy + 2) as usize];
-            *rv = [r, g, b, 255];
-        }
-        r_vec
-    }
-
     fn reset(&mut self) {
         self.state = 0;
         self.ypos = 0;
@@ -126,7 +99,7 @@ impl TuringMachine {
     }
 
     fn update(&mut self, num_iters: u32) {
-        for i in 0..num_iters {
+        for _ in 0..num_iters {
             let symbol = &mut self.map[WIDTH * self.ypos + self.xpos];
 
             let trans = &self.table[(self.num_states * (*symbol) + self.state) as usize];
@@ -170,14 +143,13 @@ impl TuringMachine {
 fn main() {
     let mut fb = mini_gl_fb::gotta_go_fast("gaymers", WIDTH as f64, HEIGHT as f64);
 
-    fb.change_buffer_format::<u8>(BufferFormat::RGBA);
-    //fb.use_post_process_shader(POST_PROCESS);
+    fb.change_buffer_format::<u8>(BufferFormat::R);
+    fb.use_post_process_shader(COLOR_SYMBOLS);
 
     let mut machine = TuringMachine::new(3, 4);
     let mut previous = SystemTime::now();
-    let mut extra_delay: f64 = 0.0;
-    let mut playing = true;
 
+    let mut playing = true;
     let mut space_pressed = false;
 
     fb.glutin_handle_basic_input(|fb, input| {
@@ -214,33 +186,52 @@ fn main() {
             space_pressed = false;
         }
 
-        if (seconds > 0.00 + extra_delay) && playing {
+        if (seconds > 0.00) && playing {
             previous = SystemTime::now();
-            machine.update(500000);
-            fb.update_buffer(&machine.get_render_buf());
-            extra_delay = 0.0;
-        // println!("frequency {}", 1.0/seconds);
-        } else if input.resized {
-            fb.redraw();
+            machine.update(500_000);
+            fb.update_buffer(&machine.map[..]);
+            println!("frequency {}", 1.0/seconds);
         }
 
         true
     });
 }
 
-const POST_PROCESS: &str = r#"
+const COLOR_SYMBOLS: &str = r#"
 
     void main_image( out vec4 r_frag_color, in vec2 uv )
     {
-        // A bool is stored as 1 in our image buffer
-        // OpenGL will map that u8/bool onto the range [0, 1]
-        // so the u8 1 in the buffer will become 1 / 255 or 0.0
-        // multiply by 255 to turn 1 / 255 into full intensity and leave 0 as 0
-        vec3 sample = texture(u_buffer, uv).rrr * 255.0;
-        // invert it since that's how GOL stuff is typically shown
-        sample = 1.0 - sample;
-        // attempt to add some grid lines (assumes width and height of image are 200)...
-
-        r_frag_color = vec4(sample, 1.0);
+        int symbol = int(texture(u_buffer, uv).r * 255);
+        switch (symbol) {
+            case 0:
+                // Red
+                r_frag_color = vec4(255.0, 0.0, 0.0, 1.0);
+                break;
+            case 1:
+                // Black
+                r_frag_color = vec4(0.0, 0.0, 0.0, 1.0);
+                break;
+            case 2:
+                // White
+                r_frag_color = vec4(255.0, 255.0, 255.0, 1.0);
+                break;
+            case 3:
+                // Green
+                r_frag_color = vec4(0.0, 255.0, 0.0, 1.0);
+                break;
+            case 4:
+                // Blue
+                r_frag_color = vec4(0.0, 0.0, 255.0, 1.0);
+                break;
+            case 5:
+                // Yellow
+                r_frag_color = vec4(255.0, 255.0, 0.0, 1.0);
+                break;
+            case 6:
+                // Magenta
+                r_frag_color = vec4(255.0, 0.0, 255.0, 1.0);
+                break;
+        }
     }
 "#;
+
