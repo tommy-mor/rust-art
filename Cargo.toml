@@ -10,7 +10,7 @@ edition = "2018"
 mini_gl_fb = "0.7.0"
 framebuffer = "0.1.8"
 arrayvec = "0.4.1"
-gl = "*"
+screenshot-rs = "0.1.5"
 
 [dependencies.rand]
 version = "0.7.0"

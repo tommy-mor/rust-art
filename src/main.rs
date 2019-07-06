@@ -8,9 +8,10 @@ use rand::{
 };
 
 use std::str::FromStr;
-use std::time::SystemTime;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use arrayvec::ArrayVec;
+use screenshot_rs::screenshot_window;
 
 const WIDTH: usize = 512;
 const HEIGHT: usize = 512;
@@ -90,7 +91,7 @@ impl TuringMachine {
         }
     }
 
-    fn from_string(transition_hash: String) -> TuringMachine {
+    fn from_string(transition_hash: &str) -> TuringMachine {
         let mut trans_table = transition_hash.split(",").map(|n| u8::from_str(n).expect("not parsable"));
         let num_states = trans_table.next().unwrap() as u16;
         let num_symbols = trans_table.next().unwrap() as u16;
@@ -187,11 +188,12 @@ fn main() {
     fb.change_buffer_format::<u8>(BufferFormat::R);
     fb.use_post_process_shader(COLOR_SYMBOLS);
 
-    let mut machine = TuringMachine::from_string("5,4,4,2,1,1,3,2,4,3,1,2,2,3,1,2,1,3,2,0,2,2,3,2,3,0,2,3,2,4,2,2,0,2,0,1,1,0,2,3,0,1,2,1,2,3,3,3,2,0,1,1,3,2,2,0,2,2,3,3,2,0".to_string());
+    let mut machine = TuringMachine::from_string("5,4,4,2,1,1,3,2,4,3,1,2,2,3,1,2,1,3,2,0,2,2,3,2,3,0,2,3,2,4,2,2,0,2,0,1,1,0,2,3,0,1,2,1,2,3,3,3,2,0,1,1,3,2,2,0,2,2,3,3,2,0");
     let mut previous = SystemTime::now();
 
     let mut playing = true;
     let mut space_pressed = false;
+    let mut s_pressed = false;
 
     fb.glutin_handle_basic_input(|fb, input| {
         let elapsed = previous.elapsed().unwrap();
@@ -205,6 +207,15 @@ fn main() {
             let mut rng = SmallRng::from_entropy();
             machine.reset();
             machine.state = rng.gen_range(0, machine.num_states) as u8;
+        }
+
+        if input.key_is_down(VirtualKeyCode::S) {
+            if !s_pressed {
+                screenshot_window(format!("screenshot-{:?}.png", previous.duration_since(UNIX_EPOCH).expect("time went backwards")));
+                s_pressed = true;
+            }
+        } else {
+            s_pressed = false
         }
 
         if input.mouse_is_down(MouseButton::Left) {
