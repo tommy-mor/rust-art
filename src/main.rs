@@ -11,7 +11,6 @@ use std::time::SystemTime;
 
 use arrayvec::ArrayVec;
 
-
 const WIDTH: usize = 1024;
 const HEIGHT: usize = 1024;
 
@@ -41,7 +40,7 @@ impl Distribution<Action> for Standard {
 struct Transition {
     state: u8,
     symbol: u8,
-    action: Action
+    action: Action,
 }
 
 const color_map: [u8; 24] = [
@@ -77,39 +76,36 @@ impl TuringMachine {
     fn new(num_states: u8, num_symbols: u8) -> TuringMachine {
         assert!(num_states >= 1, "must have at least 1 state");
         assert!(num_symbols >= 2, "must have at least 2 symbols");
-        assert!((num_states as u16 * num_symbols as u16) <= 4096, "num_states * num_symbols <= 4096");
-
-        let mut map = [0u8; WIDTH * HEIGHT];
-        let mut state = 0;
-        let mut xpos = 0;
-        let mut ypos = 0;
-        let mut itr_count = 0;
+        assert!(
+            (num_states as u16 * num_symbols as u16) <= 4096,
+            "num_states * num_symbols <= 4096"
+        );
 
         let mut table = ArrayVec::new();
         let mut rng = SmallRng::from_entropy();
         for _ in 0..(num_states as u16 * num_symbols as u16) {
-            let trans = Transition { 
+            let trans = Transition {
                 state: rng.gen_range(0, num_states),
                 symbol: rng.gen_range(0, num_symbols),
                 action: rng.gen(),
             };
-            
+
             table.push(trans);
         }
 
         TuringMachine {
             table,
-            map,
+            map: [0u8; WIDTH * HEIGHT],
             num_states,
             num_symbols,
-            state,
-            xpos,
-            ypos,
-            itr_count,
+            state: 0,
+            xpos: 0,
+            ypos: 0,
+            itr_count: 0,
         }
     }
 
-    fn get_render_buf(&self) -> Vec<[u8;4]> {
+    fn get_render_buf(&self) -> Vec<[u8; 4]> {
         let mut r_vec = vec![[0u8, 255u8, 255u8, 255u8]; WIDTH * HEIGHT];
         for (sy, rv) in self.map.iter().zip(r_vec.iter_mut()) {
             let r = color_map[(3 * sy + 0) as usize];
@@ -140,25 +136,25 @@ impl TuringMachine {
 
             match trans.action {
                 Action::Left => {
-                    self.xpos  += 1;
-                    if self.xpos >= WIDTH  {
+                    self.xpos += 1;
+                    if self.xpos >= WIDTH {
                         self.xpos -= WIDTH;
                     }
-                },
+                }
                 Action::Right => {
                     self.xpos = if let Some(x) = self.xpos.checked_sub(1) {
                         x
                     } else {
-                        WIDTH-1
+                        WIDTH - 1
                     };
-                },
+                }
                 Action::Up => {
                     self.ypos = if let Some(y) = self.ypos.checked_sub(1) {
                         y
                     } else {
-                        HEIGHT-1
+                        HEIGHT - 1
                     };
-                },
+                }
                 Action::Down => {
                     self.ypos += 1;
                     if self.ypos >= HEIGHT {
@@ -177,10 +173,7 @@ fn main() {
     fb.change_buffer_format::<u8>(BufferFormat::RGBA);
     //fb.use_post_process_shader(POST_PROCESS);
 
-
     let mut machine = TuringMachine::new(3, 4);
-    //machine.init(); //very smart
-
     let mut previous = SystemTime::now();
     let mut extra_delay: f64 = 0.0;
     let mut playing = true;
@@ -198,41 +191,22 @@ fn main() {
         if input.key_is_down(VirtualKeyCode::R) {
             let mut rng = SmallRng::from_entropy();
             machine.reset();
-            machine.state = rng.gen_range(0,machine.num_states);
-
+            machine.state = rng.gen_range(0, machine.num_states);
         }
 
-
-
         if input.mouse_is_down(MouseButton::Left) {
-            // Mouse was pressed
-            let (x, y) = input.mouse_pos;
-            let x = x.min(WIDTH as f64 - 0.0001).max(0.0).floor() as usize;
-            let y = y.min(HEIGHT as f64 - 0.0001).max(0.0).floor() as usize;
-
             playing = true;
             machine.reset();
-//            cells[y * WIDTH + x] = true;
-//            fb.update_buffer(&cells);
-//            // Give the user extra time to make something pretty each time they click
-//            previous = SystemTime::now();
-//            extra_delay = (extra_delay + 0.5).min(2.0);
         }
 
         if input.mouse_is_down(MouseButton::Right) {
-            // Mouse was pressed
             let (x, y) = input.mouse_pos;
             let x = x.min(WIDTH as f64 - 0.0001).max(0.0).floor() as usize;
             let y = y.min(HEIGHT as f64 - 0.0001).max(0.0).floor() as usize;
 
             playing = true;
-            machine = TuringMachine::new(3,4);
-        //    machine.init();
-//            cells[y * WIDTH + x] = true;
-//            fb.update_buffer(&cells);
-//            // Give the user extra time to make something pretty each time they click
+            machine = TuringMachine::new(3, 4);
             previous = SystemTime::now();
-//            extra_delay = (extra_delay + 0.5).min(2.0);
         }
 
         if input.key_is_down(VirtualKeyCode::Space) {
@@ -244,21 +218,15 @@ fn main() {
             space_pressed = false;
         }
 
-        // Each generation should stay on screen for half a second
         if (seconds > 0.00 + extra_delay) && playing {
             previous = SystemTime::now();
-//            calculate_neighbors(&mut cells, &mut neighbors);
-//            make_some_babies(&mut cells, &mut neighbors);
             machine.update(500000);
             fb.update_buffer(&machine.get_render_buf());
             extra_delay = 0.0;
-            //println!("frequency {}", 1.0/seconds);
-            //println!("{}", playing);
+        // println!("frequency {}", 1.0/seconds);
         } else if input.resized {
             fb.redraw();
         }
-
-
 
         true
     });
