@@ -18,6 +18,7 @@ const HEIGHT: usize = 512;
 
 const NUM_MACHINES: usize = 32;
 const STEPS_PER_FRAME: u32 = 10;
+const STARTENERGY: u16 = 1000;
 
 enum Action {
     Up,
@@ -48,6 +49,7 @@ struct TuringMachine {
     num_states: u16,
     num_symbols: u16,
     state: u8,
+    energy: u16,
     xpos: usize,
     ypos: usize,
     itr_count: u32,
@@ -93,6 +95,7 @@ impl TuringMachine {
             num_states,
             num_symbols,
             state: 0,
+            energy: STARTENERGY,
             xpos: rng.gen_range(0, WIDTH),
             ypos: rng.gen_range(0, HEIGHT),
             itr_count: 0,
@@ -131,6 +134,7 @@ impl TuringMachine {
             num_states,
             num_symbols,
             state: 0,
+            energy: STARTENERGY,
             xpos: 0,
             ypos: 0,
             itr_count: 0,
@@ -139,6 +143,7 @@ impl TuringMachine {
 
     fn reset(&mut self) {
         self.state = 0;
+        self.energy = STARTENERGY;
         self.ypos = 0;
         self.xpos = 0;
         self.itr_count = 0;
@@ -146,6 +151,9 @@ impl TuringMachine {
 
     fn update(&mut self, map: &mut [u8; WIDTH * HEIGHT], num_iters: u32) {
         for _ in 0..num_iters {
+
+            self.energy -= 1;
+
             let symbol = &mut map[WIDTH * self.ypos + self.xpos];
 
             let trans = &self.table[(self.num_states as u8 * (*symbol) + self.state) as usize];
@@ -204,10 +212,8 @@ fn main() {
 
     let mut map: [u8; WIDTH * HEIGHT] = [0u8; WIDTH * HEIGHT];
 
-    let mut machines = vec![];
-    for i in 0..NUM_MACHINES {
-        machines.push(TuringMachine::new(50,10));
-    }
+    let mut machines : Vec<TuringMachine> = vec![];
+
     fb.glutin_handle_basic_input(|fb, input| {
         let elapsed = previous.elapsed().unwrap();
         let seconds = elapsed.as_secs() as f64 + elapsed.subsec_nanos() as f64 * 1e-9;
@@ -253,11 +259,25 @@ fn main() {
 
         if (seconds > 0.00) && playing {
             previous = SystemTime::now();
+
             for machine in &mut machines {
                 machine.update(&mut map, STEPS_PER_FRAME);
             }
+
+            machines.retain(|machine| machine.energy > 0);
+
+            for i in 0..NUM_MACHINES-machines.len() {
+                machines.push(TuringMachine::new(50,10));
+            }
+
             fb.update_buffer(&map[..]);
             println!("frequency {}", 1.0/seconds);
+
+            for i in 0..WIDTH * HEIGHT {
+                if map[i] > 0 {
+                    map[i] -= 1;
+                }
+            }
         }
 
         true
@@ -277,6 +297,6 @@ const COLOR_SYMBOLS: &str = r#"
 
     void main_image( out vec4 r_frag_color, in vec2 uv )
     {
-        r_frag_color = vec4(hsv2rgb(vec3(texture(u_buffer, uv).r*10+0.4, 1.0, 1.0)), 1.0);
+        r_frag_color = vec4(hsv2rgb(vec3(texture(u_buffer, uv).r*10+0.4, 0.7, 1.0)), 1.0);
     }
 "#;
