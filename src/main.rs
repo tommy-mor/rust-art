@@ -13,8 +13,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use arrayvec::ArrayVec;
 use screenshot_rs::screenshot_window;
 
-const WIDTH: usize = 1024;
-const HEIGHT: usize = 1025;
+const WIDTH: usize = 512;
+const HEIGHT: usize = 512;
+
+const NUM_MACHINES: usize = 16;
 
 enum Action {
     Up,
@@ -42,7 +44,6 @@ struct Transition {
 
 struct TuringMachine {
     table: ArrayVec<[Transition; 4096]>,
-    map: [u8; WIDTH * HEIGHT],
     num_states: u16,
     num_symbols: u16,
     state: u8,
@@ -69,9 +70,16 @@ impl TuringMachine {
 
         let mut table = ArrayVec::new();
         let mut rng = SmallRng::from_entropy();
-        for _ in 0..(num_states * num_symbols) {
+        for i in 0..(num_states * num_symbols) {
+            /*
+            let mut state = 0;
+            if rng.gen_range(0,num_states*num_symbols/100) != 0 {
+                state = rng.gen_range(0, num_states) as u8;
+            }
+            */
+            let state = rng.gen_range(0, num_states) as u8;
             let trans = Transition {
-                state: rng.gen_range(0, num_states) as u8,
+                state: state,
                 symbol: rng.gen_range(0, num_symbols) as u8,
                 action: rng.gen(),
             };
@@ -81,12 +89,11 @@ impl TuringMachine {
 
         TuringMachine {
             table,
-            map: [0u8; WIDTH * HEIGHT],
             num_states,
             num_symbols,
             state: 0,
-            xpos: 0,
-            ypos: 0,
+            xpos: rng.gen_range(0, WIDTH),
+            ypos: rng.gen_range(0, HEIGHT),
             itr_count: 0,
         }
     }
@@ -120,7 +127,6 @@ impl TuringMachine {
 
         TuringMachine {
             table,
-            map: [0u8; WIDTH * HEIGHT],
             num_states,
             num_symbols,
             state: 0,
@@ -135,13 +141,11 @@ impl TuringMachine {
         self.ypos = 0;
         self.xpos = 0;
         self.itr_count = 0;
-
-        self.map = [0u8; WIDTH * HEIGHT];
     }
 
-    fn update(&mut self, num_iters: u32) {
+    fn update(&mut self, map: &mut [u8; WIDTH * HEIGHT], num_iters: u32) {
         for _ in 0..num_iters {
-            let symbol = &mut self.map[WIDTH * self.ypos + self.xpos];
+            let symbol = &mut map[WIDTH * self.ypos + self.xpos];
 
             let trans = &self.table[(self.num_states as u8 * (*symbol) + self.state) as usize];
             self.state = trans.state;
@@ -189,7 +193,7 @@ fn main() {
     fb.use_post_process_shader(COLOR_SYMBOLS);
 
     //let mut machine = TuringMachine::from_string("5,4,4,2,1,1,3,2,4,3,1,2,2,3,1,2,1,3,2,0,2,2,3,2,3,0,2,3,2,4,2,2,0,2,0,1,1,0,2,3,0,1,2,1,2,3,3,3,2,0,1,1,3,2,2,0,2,2,3,3,2,0");
-    let mut machine = TuringMachine::from_string("3,6,2,2,3,2,4,0,0,1,0,2,1,2,1,1,0,1,2,3,2,3,0,2,1,0,2,5,3,2,5,2,2,4,1,1,5,0,2,4,3,0,4,0,0,1,1,2,1,3,2,1,0,2,2,0");
+    //let mut machine = TuringMachine::from_string("3,6,2,2,3,2,4,0,0,1,0,2,1,2,1,1,0,1,2,3,2,3,0,2,1,0,2,5,3,2,5,2,2,4,1,1,5,0,2,4,3,0,4,0,0,1,1,2,1,3,2,1,0,2,2,0");
 
     let mut previous = SystemTime::now();
 
@@ -197,6 +201,12 @@ fn main() {
     let mut space_pressed = false;
     let mut s_pressed = false;
 
+    let mut map: [u8; WIDTH * HEIGHT] = [0u8; WIDTH * HEIGHT];
+
+    let mut machines = vec![];
+    for i in 0..NUM_MACHINES {
+        machines.push(TuringMachine::new(50,10));
+    }
     fb.glutin_handle_basic_input(|fb, input| {
         let elapsed = previous.elapsed().unwrap();
         let seconds = elapsed.as_secs() as f64 + elapsed.subsec_nanos() as f64 * 1e-9;
@@ -207,8 +217,8 @@ fn main() {
 
         if input.key_is_down(VirtualKeyCode::R) {
             let mut rng = SmallRng::from_entropy();
-            machine.reset();
-            machine.state = rng.gen_range(0, machine.num_states) as u8;
+            //machine.reset();
+            //machine.state = rng.gen_range(0, machine.num_states) as u8;
         }
 
         if input.key_is_down(VirtualKeyCode::S) {
@@ -222,12 +232,12 @@ fn main() {
 
         if input.mouse_is_down(MouseButton::Left) {
             playing = true;
-            machine.reset();
+            //machine.reset();
         }
 
         if input.mouse_is_down(MouseButton::Right) {
             playing = true;
-            machine = TuringMachine::new(12, 7);
+            //machine = TuringMachine::new(50,10);//12, 7);
             previous = SystemTime::now();
         }
 
@@ -242,8 +252,10 @@ fn main() {
 
         if (seconds > 0.00) && playing {
             previous = SystemTime::now();
-            machine.update(50_000);
-            fb.update_buffer(&machine.map[..]);
+            for machine in &mut machines {
+                machine.update(&mut map, 1);
+            }
+            fb.update_buffer(&map[..]);
             println!("frequency {}", 1.0/seconds);
         }
 
@@ -287,4 +299,3 @@ const COLOR_SYMBOLS: &str = r#"
         }
     }
 "#;
-
