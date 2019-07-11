@@ -267,7 +267,7 @@ fn main() {
             machines.retain(|machine| machine.energy > 0);
 
             for i in 0..NUM_MACHINES-machines.len() {
-                machines.push(TuringMachine::new(50,10));
+                machines.push(TuringMachine::new(50,64));
             }
 
             fb.update_buffer(&map[..]);
@@ -297,6 +297,11 @@ const COLOR_SYMBOLS: &str = r#"
 
     void main_image( out vec4 r_frag_color, in vec2 uv )
     {
-        r_frag_color = vec4(hsv2rgb(vec3(texture(u_buffer, uv).r*10+0.4, 0.7, 1.0)), 1.0);
+        float red = texture(u_buffer, uv).r;
+        if (red == 0) {
+            r_frag_color = vec4(0.0, 0.0, 0.0, 1.0);
+        } else {
+            r_frag_color = vec4(hsv2rgb(vec3(red*10+0.4, 0.7, 1.0)), 1.0);
+        }
     }
 "#;
