@@ -18,7 +18,7 @@ const HEIGHT: usize = 512;
 
 const NUM_MACHINES: usize = 32;
 const STEPS_PER_FRAME: u32 = 10;
-const STARTENERGY: u32 = 1000;
+const STARTENERGY: u32 = 10;
 
 enum Action {
     Up,
@@ -158,7 +158,7 @@ impl TuringMachine {
 
             let symbol = &mut map[WIDTH * self.ypos + self.xpos];
 
-            self.energy += *symbol as u32;
+            self.energy += (*symbol as u32)/10;
 
             let trans = &self.table[(self.num_states as u8 * (*symbol) + self.state) as usize];
             self.state = trans.state;
