@@ -16,7 +16,7 @@ use screenshot_rs::screenshot_window;
 const WIDTH: usize = 512;
 const HEIGHT: usize = 512;
 
-const NUM_MACHINES: usize = 1;
+const NUM_MACHINES: usize = 10;
 const STEPS_PER_FRAME: u32 = 10;
 const STARTENERGY: u32 = 10;
 const REPLICATIONCOST: u32 = 500;
@@ -303,7 +303,7 @@ fn main() {
             for machine in &mut machines {
                 machine.update(&mut map, STEPS_PER_FRAME, &mut newmachines);
             }
-            println!("{}", newmachines.len());
+            //println!("{}", newmachines.len());
             //machines.extend(newmachines);
             for newmachine in newmachines {
                 machines.push(newmachine);
