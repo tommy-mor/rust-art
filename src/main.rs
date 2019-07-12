@@ -16,36 +16,42 @@ use screenshot_rs::screenshot_window;
 const WIDTH: usize = 512;
 const HEIGHT: usize = 512;
 
-const NUM_MACHINES: usize = 32;
+const NUM_MACHINES: usize = 1;
 const STEPS_PER_FRAME: u32 = 10;
 const STARTENERGY: u32 = 10;
+const REPLICATIONCOST: u32 = 500;
 
+#[derive(Clone)]
 enum Action {
     Up,
     Down,
     Left,
     Right,
     Wait,
+    Replicate,
 }
 
 impl Distribution<Action> for Standard {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Action {
-        match rng.gen_range(0, 5) {
+        match rng.gen_range(0, 6) {
             0 => Action::Up,
             1 => Action::Down,
             2 => Action::Left,
             3 => Action::Right,
-            _ => Action::Wait,
+            4 => Action::Wait,
+            _ => Action::Replicate,
         }
     }
 }
 
+#[derive(Clone)]
 struct Transition {
     state: u8,
     symbol: u8,
     action: Action,
 }
 
+#[derive(Clone)]
 struct TuringMachine {
     table: ArrayVec<[Transition; 4096]>,
     num_states: u16,
@@ -151,7 +157,7 @@ impl TuringMachine {
         self.itr_count = 0;
     }
 
-    fn update(&mut self, map: &mut [u8; WIDTH * HEIGHT], num_iters: u32) {
+    fn update(&mut self, map: &mut [u8; WIDTH * HEIGHT], num_iters: u32, machines: &mut Vec<TuringMachine>) {
         for _ in 0..num_iters {
 
             self.energy -= 1;
@@ -164,6 +170,8 @@ impl TuringMachine {
             self.state = trans.state;
 
             *symbol = trans.symbol;
+
+            self.itr_count += 1;
 
             match trans.action {
                 Action::Left => {
@@ -196,8 +204,20 @@ impl TuringMachine {
                 Action::Wait => {
 
                 }
+                Action::Replicate => {
+                    if self.energy > REPLICATIONCOST {
+                        //println!("REPLICATE");
+                        //TODO Higher costs for higher table complexity? Maybe just per step?
+                        //TODO ensure STARTENERGY < REPLICATIONCOST!, but also see what happens otherwise
+                        self.energy -= REPLICATIONCOST;
+                        let mut newmachine = self.clone();
+                        newmachine.xpos = (newmachine.xpos + 1) % WIDTH;
+                        newmachine.ypos = (newmachine.ypos + 1) % HEIGHT;
+                        newmachine.energy = STARTENERGY;
+                        machines.push(newmachine);
+                    }
+                }
             }
-            self.itr_count += 1;
         }
     }
 }
@@ -253,7 +273,7 @@ fn main() {
 
         if input.mouse_is_down(MouseButton::Right) {
             playing = true;
-            //machine = TuringMachine::new(50,10);//12, 7);
+            machines = vec![];
             previous = SystemTime::now();
         }
 
@@ -269,18 +289,25 @@ fn main() {
         if (seconds > 0.00) && playing {
             previous = SystemTime::now();
 
+            let mut newmachines : Vec<TuringMachine> = vec![];
             for machine in &mut machines {
-                machine.update(&mut map, STEPS_PER_FRAME);
+                machine.update(&mut map, STEPS_PER_FRAME, &mut newmachines);
             }
-
+            println!("{}", newmachines.len());
+            //machines.extend(newmachines);
+            for newmachine in newmachines {
+                machines.push(newmachine);
+            }
             machines.retain(|machine| machine.energy > 0);
 
-            for i in 0..NUM_MACHINES-machines.len() {
-                machines.push(TuringMachine::new(50,64));
+            if machines.len() < NUM_MACHINES {
+                for i in 0..NUM_MACHINES-machines.len() {
+                    machines.push(TuringMachine::new(50,64));
+                }
             }
 
             fb.update_buffer(&map[..]);
-            println!("frequency {}", 1.0/seconds);
+            println!("Frequency: {} Machines: {}", 1.0/seconds, machines.len());
 
             //if ITER % 100 == 0 {
             if true {
