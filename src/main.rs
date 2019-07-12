@@ -18,8 +18,8 @@ const HEIGHT: usize = 512;
 
 const NUM_MACHINES: usize = 10;
 const STEPS_PER_FRAME: u32 = 10;
-const STARTENERGY: u32 = 100;
-const REPLICATIONCOST: u32 = 50;
+const STARTENERGY: u32 = 200;
+const REPLICATIONCOST: u32 = 10;
 
 #[derive(Clone)]
 enum Action {
@@ -220,10 +220,11 @@ impl TuringMachine {
                         //TODO Higher costs for higher table complexity? Maybe just per step?
                         //TODO ensure STARTENERGY < REPLICATIONCOST!, but also see what happens otherwise
                         self.energy -= REPLICATIONCOST;
+                        self.energy /= 2;
                         let mut newmachine = self.clone();
                         newmachine.xpos = (newmachine.xpos + 1) % WIDTH;
                         newmachine.ypos = (newmachine.ypos + 1) % HEIGHT;
-                        newmachine.energy = STARTENERGY;
+                        newmachine.energy = self.energy;//STARTENERGY;
                         machines.push(newmachine);
                     }
                 }
