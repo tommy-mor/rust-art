@@ -25,15 +25,17 @@ enum Action {
     Down,
     Left,
     Right,
+    Wait,
 }
 
 impl Distribution<Action> for Standard {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Action {
-        match rng.gen_range(0, 4) {
+        match rng.gen_range(0, 5) {
             0 => Action::Up,
             1 => Action::Down,
             2 => Action::Left,
-            _ => Action::Right,
+            3 => Action::Right,
+            _ => Action::Wait,
         }
     }
 }
@@ -189,6 +191,9 @@ impl TuringMachine {
                         self.ypos -= HEIGHT;
                     }
                 }
+                Action::Wait => {
+
+                }
             }
             self.itr_count += 1;
         }
@@ -213,6 +218,8 @@ fn main() {
     let mut map: [u8; WIDTH * HEIGHT] = [0u8; WIDTH * HEIGHT];
 
     let mut machines : Vec<TuringMachine> = vec![];
+
+    let mut ITER: u64 = 0;
 
     fb.glutin_handle_basic_input(|fb, input| {
         let elapsed = previous.elapsed().unwrap();
@@ -273,11 +280,16 @@ fn main() {
             fb.update_buffer(&map[..]);
             println!("frequency {}", 1.0/seconds);
 
-            for i in 0..WIDTH * HEIGHT {
-                if map[i] > 0 {
-                    map[i] -= 1;
+            //if ITER % 100 == 0 {
+            if true {
+                for i in 0..WIDTH * HEIGHT {
+                    if map[i] > 0 {
+                        map[i] -= 1;
+                    }
                 }
             }
+
+            ITER += 1;
         }
 
         true
@@ -301,7 +313,7 @@ const COLOR_SYMBOLS: &str = r#"
         if (red == 0) {
             r_frag_color = vec4(0.0, 0.0, 0.0, 1.0);
         } else {
-            r_frag_color = vec4(hsv2rgb(vec3(red*10+0.4, 0.7, 1.0)), 1.0);
+            r_frag_color = vec4(hsv2rgb(vec3(red*4, 0.7, 1.0)), 1.0);
         }
     }
 "#;
