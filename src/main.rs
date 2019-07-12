@@ -159,9 +159,11 @@ impl TuringMachine {
 
     fn update(&mut self, map: &mut [u8; WIDTH * HEIGHT], num_iters: u32, machines: &mut Vec<TuringMachine>) {
         for _ in 0..num_iters {
+            //println!("Start, {}", self.energy);
 
-            self.energy -= 1;
-
+            if (self.energy > 0) {
+                self.energy -= 1;
+            }
             let symbol = &mut map[WIDTH * self.ypos + self.xpos];
 
             self.energy += (*symbol as u32)/10;
@@ -170,6 +172,14 @@ impl TuringMachine {
             self.state = trans.state;
 
             *symbol = trans.symbol;
+            let writecost = (*symbol as u32)/10;
+            if (writecost > self.energy) {
+                self.energy = 0;
+            } else {
+                self.energy -= writecost;
+            }
+
+            //println!("End, {}", self.energy);
 
             self.itr_count += 1;
 
