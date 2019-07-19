@@ -18,8 +18,8 @@ const HEIGHT: usize = 512;
 
 const NUM_MACHINES: usize = 10;
 const STEPS_PER_FRAME: u32 = 10;
-const STARTENERGY: u32 = 200;
-const REPLICATIONCOST: u32 = 10;
+const STARTENERGY: u32 = 10000;
+const REPLICATIONCOST: u32 = 100;
 
 #[derive(Clone)]
 enum Action {
@@ -157,22 +157,34 @@ impl TuringMachine {
         self.itr_count = 0;
     }
 
+    fn mutate(&mut self) {
+        let mut rng = SmallRng::from_entropy();
+        let state = rng.gen_range(0, self.num_states) as u8;
+        let trans = Transition {
+            state: state,
+            symbol: rng.gen_range(0, self.num_symbols) as u8,
+            action: rng.gen(),
+        };
+        let tablen = self.table.len();
+        self.table[rng.gen_range(0, tablen)] = trans;
+    }
+
     fn update(&mut self, map: &mut [u8; WIDTH * HEIGHT], num_iters: u32, machines: &mut Vec<TuringMachine>) {
         for _ in 0..num_iters {
             //println!("Start, {}", self.energy);
 
             if (self.energy > 0) {
-                self.energy -= 1;
+                //self.energy -= 1;
             }
             let symbol = &mut map[WIDTH * self.ypos + self.xpos];
 
-            self.energy += (*symbol as u32)/10;
+            //self.energy += (*symbol as u32)/20;
 
             let trans = &self.table[(self.num_states as u8 * (*symbol) + self.state) as usize];
             self.state = trans.state;
 
             *symbol = trans.symbol;
-            let writecost = (*symbol as u32)/10;
+            let writecost = 0;//(*symbol as u32)/10;
             if (writecost > self.energy) {
                 self.energy = 0;
             } else {
@@ -222,6 +234,7 @@ impl TuringMachine {
                         self.energy -= REPLICATIONCOST;
                         self.energy /= 2;
                         let mut newmachine = self.clone();
+                        newmachine.mutate();
                         newmachine.xpos = (newmachine.xpos + 1) % WIDTH;
                         newmachine.ypos = (newmachine.ypos + 1) % HEIGHT;
                         newmachine.energy = self.energy;//STARTENERGY;
