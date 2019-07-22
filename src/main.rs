@@ -13,39 +13,51 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use arrayvec::ArrayVec;
 use screenshot_rs::screenshot_window;
 
-const WIDTH: usize = 1024;
-const HEIGHT: usize = 1025;
+const WIDTH: usize = 512;
+const HEIGHT: usize = 512;
 
+const NUM_MACHINES: usize = 10;
+const STEPS_PER_FRAME: u32 = 10;
+const STARTENERGY: u32 = 50000;
+const REPLICATIONCOST: u32 = 100;
+
+#[derive(Clone)]
 enum Action {
     Up,
     Down,
     Left,
     Right,
+    Wait,
+    Replicate,
 }
 
 impl Distribution<Action> for Standard {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Action {
-        match rng.gen_range(0, 4) {
+        match rng.gen_range(0, 6) {
             0 => Action::Up,
             1 => Action::Down,
             2 => Action::Left,
-            _ => Action::Right,
+            3 => Action::Right,
+            4 => Action::Wait,
+            _ => Action::Replicate,
         }
     }
 }
 
+#[derive(Clone)]
 struct Transition {
     state: u8,
     symbol: u8,
     action: Action,
 }
 
+#[derive(Clone)]
 struct TuringMachine {
     table: ArrayVec<[Transition; 4096]>,
-    map: [u8; WIDTH * HEIGHT],
     num_states: u16,
     num_symbols: u16,
     state: u8,
+    energy: u32,
     xpos: usize,
     ypos: usize,
     itr_count: u32,
@@ -69,9 +81,16 @@ impl TuringMachine {
 
         let mut table = ArrayVec::new();
         let mut rng = SmallRng::from_entropy();
-        for _ in 0..(num_states * num_symbols) {
+        for i in 0..(num_states * num_symbols) {
+            /*
+            let mut state = 0;
+            if rng.gen_range(0,num_states*num_symbols/100) != 0 {
+                state = rng.gen_range(0, num_states) as u8;
+            }
+            */
+            let state = rng.gen_range(0, num_states) as u8;
             let trans = Transition {
-                state: rng.gen_range(0, num_states) as u8,
+                state: state,
                 symbol: rng.gen_range(0, num_symbols) as u8,
                 action: rng.gen(),
             };
@@ -81,12 +100,12 @@ impl TuringMachine {
 
         TuringMachine {
             table,
-            map: [0u8; WIDTH * HEIGHT],
             num_states,
             num_symbols,
             state: 0,
-            xpos: 0,
-            ypos: 0,
+            energy: STARTENERGY,
+            xpos: rng.gen_range(0, WIDTH),
+            ypos: rng.gen_range(0, HEIGHT),
             itr_count: 0,
         }
     }
@@ -120,10 +139,10 @@ impl TuringMachine {
 
         TuringMachine {
             table,
-            map: [0u8; WIDTH * HEIGHT],
             num_states,
             num_symbols,
             state: 0,
+            energy: STARTENERGY,
             xpos: 0,
             ypos: 0,
             itr_count: 0,
@@ -132,21 +151,49 @@ impl TuringMachine {
 
     fn reset(&mut self) {
         self.state = 0;
+        self.energy = STARTENERGY;
         self.ypos = 0;
         self.xpos = 0;
         self.itr_count = 0;
-
-        self.map = [0u8; WIDTH * HEIGHT];
     }
 
-    fn update(&mut self, num_iters: u32) {
+    fn mutate(&mut self) {
+        let mut rng = SmallRng::from_entropy();
+        let state = rng.gen_range(0, self.num_states) as u8;
+        let trans = Transition {
+            state: state,
+            symbol: rng.gen_range(0, self.num_symbols) as u8,
+            action: rng.gen(),
+        };
+        let tablen = self.table.len();
+        self.table[rng.gen_range(0, tablen)] = trans;
+    }
+
+    fn update(&mut self, map: &mut [u8; WIDTH * HEIGHT], num_iters: u32, machines: &mut Vec<TuringMachine>) {
         for _ in 0..num_iters {
-            let symbol = &mut self.map[WIDTH * self.ypos + self.xpos];
+            //println!("Start, {}", self.energy);
+
+            if (self.energy > 0) {
+                self.energy -= 1;
+            }
+            let symbol = &mut map[WIDTH * self.ypos + self.xpos];
+
+            //self.energy += (*symbol as u32)/20;
 
             let trans = &self.table[(self.num_states as u8 * (*symbol) + self.state) as usize];
             self.state = trans.state;
 
             *symbol = trans.symbol;
+            let writecost = (*symbol as u32);
+            if writecost > self.energy {
+                self.energy = 0;
+            } else {
+                self.energy -= writecost;
+            }
+
+            //println!("End, {}", self.energy);
+
+            self.itr_count += 1;
 
             match trans.action {
                 Action::Left => {
@@ -176,8 +223,25 @@ impl TuringMachine {
                         self.ypos -= HEIGHT;
                     }
                 }
+                Action::Wait => {
+
+                }
+                Action::Replicate => {
+                    if self.energy > REPLICATIONCOST {
+                        //println!("REPLICATE");
+                        //TODO Higher costs for higher table complexity? Maybe just per step?
+                        //TODO ensure STARTENERGY < REPLICATIONCOST!, but also see what happens otherwise
+                        self.energy -= REPLICATIONCOST;
+                        self.energy /= 2;
+                        let mut newmachine = self.clone();
+                        newmachine.mutate();
+                        newmachine.xpos = (newmachine.xpos + 1) % WIDTH;
+                        newmachine.ypos = (newmachine.ypos + 1) % HEIGHT;
+                        newmachine.energy = self.energy;//STARTENERGY;
+                        machines.push(newmachine);
+                    }
+                }
             }
-            self.itr_count += 1;
         }
     }
 }
@@ -189,13 +253,19 @@ fn main() {
     fb.use_post_process_shader(COLOR_SYMBOLS);
 
     //let mut machine = TuringMachine::from_string("5,4,4,2,1,1,3,2,4,3,1,2,2,3,1,2,1,3,2,0,2,2,3,2,3,0,2,3,2,4,2,2,0,2,0,1,1,0,2,3,0,1,2,1,2,3,3,3,2,0,1,1,3,2,2,0,2,2,3,3,2,0");
-    let mut machine = TuringMachine::from_string("3,6,2,2,3,2,4,0,0,1,0,2,1,2,1,1,0,1,2,3,2,3,0,2,1,0,2,5,3,2,5,2,2,4,1,1,5,0,2,4,3,0,4,0,0,1,1,2,1,3,2,1,0,2,2,0");
+    //let mut machine = TuringMachine::from_string("3,6,2,2,3,2,4,0,0,1,0,2,1,2,1,1,0,1,2,3,2,3,0,2,1,0,2,5,3,2,5,2,2,4,1,1,5,0,2,4,3,0,4,0,0,1,1,2,1,3,2,1,0,2,2,0");
 
     let mut previous = SystemTime::now();
 
     let mut playing = true;
     let mut space_pressed = false;
     let mut s_pressed = false;
+
+    let mut map: [u8; WIDTH * HEIGHT] = [0u8; WIDTH * HEIGHT];
+
+    let mut machines : Vec<TuringMachine> = vec![];
+
+    let mut ITER: u64 = 0;
 
     fb.glutin_handle_basic_input(|fb, input| {
         let elapsed = previous.elapsed().unwrap();
@@ -207,8 +277,8 @@ fn main() {
 
         if input.key_is_down(VirtualKeyCode::R) {
             let mut rng = SmallRng::from_entropy();
-            machine.reset();
-            machine.state = rng.gen_range(0, machine.num_states) as u8;
+            //machine.reset();
+            //machine.state = rng.gen_range(0, machine.num_states) as u8;
         }
 
         if input.key_is_down(VirtualKeyCode::S) {
@@ -222,12 +292,22 @@ fn main() {
 
         if input.mouse_is_down(MouseButton::Left) {
             playing = true;
-            machine.reset();
+            // Feed
+            let (mx, my) = input.mouse_pos;
+            let mx = mx as usize;
+            let my = my as usize;
+            let ms = 16;
+            for x in mx-ms..mx+ms+1 {
+                for y in my-ms..my+ms+1 {
+                    map[(y*WIDTH + x) as usize] += 40;
+                }
+            }
+            //machine.reset();
         }
 
         if input.mouse_is_down(MouseButton::Right) {
             playing = true;
-            machine = TuringMachine::new(12, 7);
+            machines = vec![];
             previous = SystemTime::now();
         }
 
@@ -242,9 +322,44 @@ fn main() {
 
         if (seconds > 0.00) && playing {
             previous = SystemTime::now();
-            machine.update(50_000);
-            fb.update_buffer(&machine.map[..]);
-            println!("frequency {}", 1.0/seconds);
+
+            let mut newmachines : Vec<TuringMachine> = vec![];
+            for machine in &mut machines {
+                machine.update(&mut map, STEPS_PER_FRAME, &mut newmachines);
+            }
+            //println!("{}", newmachines.len());
+            //machines.extend(newmachines);
+
+            let mut rng = SmallRng::from_entropy();
+            let sx = rng.gen_range(0, WIDTH);
+            let sy = rng.gen_range(0, HEIGHT);
+
+            map[(sy*WIDTH+sx) as usize] = 255;
+
+            for newmachine in newmachines {
+                machines.push(newmachine);
+            }
+            machines.retain(|machine| machine.energy > 0);
+
+            if machines.len() < NUM_MACHINES {
+                for i in 0..NUM_MACHINES-machines.len() {
+                    machines.push(TuringMachine::new(50,64));
+                }
+            }
+
+            fb.update_buffer(&map[..]);
+            println!("Frequency: {} Machines: {}", 1.0/seconds, machines.len());
+
+            //if ITER % 100 == 0 {
+            if true {
+                for i in 0..WIDTH * HEIGHT {
+                    if map[i] > 0 {
+                        map[i] -= 1;
+                    }
+                }
+            }
+
+            ITER += 1;
         }
 
         true
@@ -252,39 +367,23 @@ fn main() {
 }
 
 const COLOR_SYMBOLS: &str = r#"
+
+
+    vec3 hsv2rgb(vec3 c)
+    {
+        vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+        vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+        return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+    }
+
+
     void main_image( out vec4 r_frag_color, in vec2 uv )
     {
-        int symbol = int(texture(u_buffer, uv).r * 255);
-        switch (symbol) {
-            case 0:
-                // Red
-                r_frag_color = vec4(255.0, 0.0, 0.0, 1.0);
-                break;
-            case 1:
-                // Black
-                r_frag_color = vec4(0.0, 0.0, 0.0, 1.0);
-                break;
-            case 2:
-                // White
-                r_frag_color = vec4(255.0, 255.0, 255.0, 1.0);
-                break;
-            case 3:
-                // Green
-                r_frag_color = vec4(0.0, 255.0, 0.0, 1.0);
-                break;
-            case 4:
-                // Blue
-                r_frag_color = vec4(0.0, 0.0, 255.0, 1.0);
-                break;
-            case 5:
-                // Yellow
-                r_frag_color = vec4(255.0, 255.0, 0.0, 1.0);
-                break;
-            case 6:
-                // Magenta
-                r_frag_color = vec4(255.0, 0.0, 255.0, 1.0);
-                break;
+        float red = texture(u_buffer, uv).r;
+        if (red == 0) {
+            r_frag_color = vec4(0.0, 0.0, 0.0, 1.0);
+        } else {
+            r_frag_color = vec4(hsv2rgb(vec3(red*4, 0.7, 1.0)), 1.0);
         }
     }
 "#;
-
