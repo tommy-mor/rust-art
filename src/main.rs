@@ -18,7 +18,7 @@ const HEIGHT: usize = 512;
 
 const NUM_MACHINES: usize = 10;
 const STEPS_PER_FRAME: u32 = 10;
-const STARTENERGY: u32 = 10000;
+const STARTENERGY: u32 = 50000;
 const REPLICATIONCOST: u32 = 100;
 
 #[derive(Clone)]
@@ -174,7 +174,7 @@ impl TuringMachine {
             //println!("Start, {}", self.energy);
 
             if (self.energy > 0) {
-                //self.energy -= 1;
+                self.energy -= 1;
             }
             let symbol = &mut map[WIDTH * self.ypos + self.xpos];
 
@@ -184,8 +184,8 @@ impl TuringMachine {
             self.state = trans.state;
 
             *symbol = trans.symbol;
-            let writecost = 0;//(*symbol as u32)/10;
-            if (writecost > self.energy) {
+            let writecost = (*symbol as u32);
+            if writecost > self.energy {
                 self.energy = 0;
             } else {
                 self.energy -= writecost;
@@ -329,6 +329,13 @@ fn main() {
             }
             //println!("{}", newmachines.len());
             //machines.extend(newmachines);
+
+            let mut rng = SmallRng::from_entropy();
+            let sx = rng.gen_range(0, WIDTH);
+            let sy = rng.gen_range(0, HEIGHT);
+
+            map[(sy*WIDTH+sx) as usize] = 255;
+
             for newmachine in newmachines {
                 machines.push(newmachine);
             }
